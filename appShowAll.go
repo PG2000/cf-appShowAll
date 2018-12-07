@@ -9,8 +9,6 @@ import (
 	"strings"
 )
 
-const OPEN_PROTOCOL = "https"
-
 type AppShowAll struct {
 	ui terminal.UI
 }
@@ -22,30 +20,34 @@ func (c *AppShowAll) Run(cliConnection plugin.CliConnection, args []string) {
 
 	c.ui = terminal.NewUI(os.Stdin, os.Stdout, terminal.NewTeePrinter(os.Stdout), nil)
 
-	s, e := cliConnection.GetApps()
+	apps, appsError := cliConnection.GetApps()
 
-	if e != nil {
-		c.ui.Failed(e.Error())
+	if appsError != nil {
+		c.ui.Failed(appsError.Error())
 	}
 
 	table := c.ui.Table([]string{"Name", "Routes", "Bound Services", "Bound Routings"})
-	for _, v := range s {
 
-		model, e := cliConnection.GetApp(v.Name)
+	for _, app := range apps {
+		model, e := cliConnection.GetApp(app.Name)
 
 		if e != nil {
 			c.ui.Failed(e.Error())
 		}
 
-		table.Add(v.Name, c.join(getRoutes(v.Routes)), c.join(getServices(model.Services)), string(v.TotalInstances))
+		table.Add(app.Name, join(getRoutes(app.Routes)), join(getServices(model.Services)), string(app.TotalInstances))
 	}
 
-	table.Print()
+	if len(apps) > 0 {
+		table.Print()
+	} else {
+		c.ui.Say("No apps in space")
+	}
 
 }
 
-func (c *AppShowAll) join(toJoin []string) string {
-	return strings.Join(toJoin, "\n")
+func join(toJoin []string) string {
+	return strings.Join(toJoin, ", ")
 }
 
 func getServices(summaries []plugin_models.GetApp_ServiceSummary) []string {
@@ -62,26 +64,27 @@ func getRoutes(summaries []plugin_models.GetAppsRouteSummary) []string {
 	var route []string
 
 	for _, v := range summaries {
-		route = append(route, fmt.Sprintf("%s://%s.%s", OPEN_PROTOCOL, v.Host, v.Domain.Name))
+		route = append(route, fmt.Sprintf("%s://%s.%s", "https", v.Host, v.Domain.Name))
 	}
 
 	return route
 }
 
 func (c *AppShowAll) GetMetadata() plugin.PluginMetadata {
+	const pluginCommand = "apps-show-all"
 	return plugin.PluginMetadata{
-		Name: "app-show-all",
+		Name: pluginCommand,
 		Version: plugin.VersionType{
 			Major: 0,
 			Minor: 0,
 			Build: 1,
 		},
 		Commands: []plugin.Command{
-			plugin.Command{
-				Name:     "app-show-all",
-				HelpText: "show all service instance bindings, route bindings",
+			{
+				Name:     pluginCommand,
+				HelpText: "show all service instance bindings, route bindings for all apps in current space",
 				UsageDetails: plugin.Usage{
-					Usage:   "app-show-all",
+					Usage:   pluginCommand,
 					Options: map[string]string{},
 				},
 			},
